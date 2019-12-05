@@ -1,5 +1,6 @@
-use std::error::Error;
+use digits_iterator::*;
 use std::convert::TryFrom;
+use std::error::Error;
 
 enum Parameter {
     Position(usize),
@@ -28,77 +29,109 @@ fn main() -> Result<(), Box<dyn Error>> {
         .map(|x| x.trim().parse().unwrap())
         .collect::<Vec<i32>>();
 
-    run_program(input)?;
+    run_program(input.clone(), 1)?;
+    println!("");
+    run_program(input, 5)?;
 
     Ok(())
 }
 
-fn run_program(mut input: Vec<i32>) -> Result<Vec<i32>, Box<dyn Error>> {
-    let mut i = 0;
+fn get_opcode(input: &[i32], i: &mut usize) -> ([u8; 3], i32) {
+    let opcode: i32 = input[*i];
+    *i += 1;
 
-    while i < input.len() {
-        let opcode: i32 = input[i];
+    let reversed_digits = opcode.digits().rev().collect::<Vec<u8>>();
 
-        let mode_1 = u8::try_from((opcode % 1_000 / 100) % 100)?;
-        let mode_2 = u8::try_from((opcode % 10_000 / 1_000) % 10)?;
-        let _mode_3 = u8::try_from(opcode / 10_000)?;
-        let opcode = opcode % 100;
+    let mode_1: u8 = reversed_digits.get(2).copied().unwrap_or(0);
+    let mode_2: u8 = reversed_digits.get(3).copied().unwrap_or(0);
+    let mode_3: u8 = reversed_digits.get(4).copied().unwrap_or(0);
 
-        match opcode % 100 {
-            1 => {
-                let param_1 = Parameter::new(mode_1, input[i + 1])?;
-                let param_2 = Parameter::new(mode_2, input[i + 2])?;
-                let target = usize::try_from(input[i + 3])?;
+    let opcode = opcode % 100;
 
-                let value_1 = param_1.get_value(&input);
-                let value_2 = param_2.get_value(&input);
-
-                input[target] = value_1 + value_2;
-
-                i += 4;
-            },
-            2 => {
-                let param_1 = Parameter::new(mode_1, input[i + 1])?;
-                let param_2 = Parameter::new(mode_2, input[i + 2])?;
-                let target = usize::try_from(input[i + 3])?;
-
-                let value_1 = param_1.get_value(&input);
-                let value_2 = param_2.get_value(&input);
-
-                input[target] = value_1 * value_2;
-
-                i += 4;
-            },
-            3 => {
-
-                let target = usize::try_from(input[i + 1])?;
-                let value_1 = 1;
-                input[target] = value_1;
-
-                i += 2;
-            },
-            4 => {
-                let param_1 = Parameter::new(mode_1, input[i + 1])?;
-                let value_1 = param_1.get_value(&input);
-                println!("{}", value_1);
-                i += 2;
-            }
-            99 => {
-                println!("HALT");
-                break
-            }
-            x => panic!(format!("illegal opcode: {}", x)),
-        };
-    }
-
-    Ok(input)
+    ([mode_1, mode_2, mode_3], opcode)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn test_run_program() {
-        assert_eq!(run_program(vec![1002,4,3,4,33_i32]).unwrap(), vec![1002,4,3,4,99]);
+fn get_value(input: &[i32], i: &mut usize, mode: u8) -> Result<i32, Box<dyn Error>> {
+    let param = Parameter::new(mode, input[*i])?;
+    *i += 1;
+    Ok(param.get_value(input))
+}
+fn get_target(input: &[i32], i: &mut usize) -> Result<usize, Box<dyn Error>> {
+    let target = usize::try_from(input[*i])?;
+    *i += 1;
+    Ok(target)
+}
+
+fn run_program(mut input: Vec<i32>, system_id: i32) -> Result<Vec<i32>, Box<dyn Error>> {
+    let mut i = 0;
+    while i < input.len() {
+        let ([mode_1, mode_2, _mode_3], opcode) = get_opcode(&input, &mut i);
+        match opcode {
+            1 => {
+                let value_1 = get_value(&input, &mut i, mode_1)?;
+                let value_2 = get_value(&input, &mut i, mode_2)?;
+                let target = get_target(&input, &mut i)?;
+                input[target] = value_1 + value_2;
+            }
+            2 => {
+                let value_1 = get_value(&input, &mut i, mode_1)?;
+                let value_2 = get_value(&input, &mut i, mode_2)?;
+                let target = get_target(&input, &mut i)?;
+                input[target] = value_1 * value_2;
+            }
+            3 => {
+                let target = get_target(&input, &mut i)?;
+                input[target] = system_id;
+            }
+            4 => {
+                let value_1 = get_value(&input, &mut i, mode_1)?;
+                println!("{}", value_1);
+            }
+            5 => {
+                let value_1 = get_value(&input, &mut i, mode_1)?;
+                let value_2 = get_value(&input, &mut i, mode_2)?;
+
+                if value_1 != 0 {
+                    i = usize::try_from(value_2)?;
+                }
+            }
+            6 => {
+                let value_1 = get_value(&input, &mut i, mode_1)?;
+                let value_2 = get_value(&input, &mut i, mode_2)?;
+
+                if value_1 == 0 {
+                    i = usize::try_from(value_2)?;
+                }
+            }
+            7 => {
+                let value_1 = get_value(&input, &mut i, mode_1)?;
+                let value_2 = get_value(&input, &mut i, mode_2)?;
+                let target = get_target(&input, &mut i)?;
+
+                if value_1 < value_2 {
+                    input[target] = 1;
+                } else {
+                    input[target] = 0;
+                }
+            }
+            8 => {
+                let value_1 = get_value(&input, &mut i, mode_1)?;
+                let value_2 = get_value(&input, &mut i, mode_2)?;
+                let target = get_target(&input, &mut i)?;
+
+                if value_1 == value_2 {
+                    input[target] = 1;
+                } else {
+                    input[target] = 0;
+                }
+            }
+
+            99 => {
+                println!("HALT");
+                break;
+            }
+            x => panic!(format!("illegal opcode: {}", x)),
+        }
     }
+    Ok(input)
 }
