@@ -69,10 +69,14 @@ impl IsBetween<i32> for i32 {
 
 struct Wire(Vec<Line>);
 impl Wire {
-    pub fn coords_iter(& self) -> impl Iterator<Item = Coord> + '_ {
-        self.0[0].coords_iter().chain(
-            (&self.0[1..]).iter().copied().flat_map(|line| line.coords_iter().skip(1))
-        )
+    pub fn coords_iter(&self) -> impl Iterator<Item = Coord> + '_ {
+        let starting_coord_iter = self
+            .0
+            .first()
+            .into_iter()
+            .flat_map(|line| line.coords_iter());
+
+        starting_coord_iter.chain(self.0.iter().flat_map(|line| line.coords_iter()))
     }
 }
 
@@ -88,11 +92,10 @@ impl Line {
         let mut coord = self.start;
 
         std::iter::repeat_with(move || {
-            let tmp = coord;
             coord = coord + to_add;
-            tmp
+            coord
         })
-        .take(self.distance as usize + 1)
+        .take(usize::from(self.distance))
     }
 
     pub fn end(&self) -> Coord {
@@ -179,7 +182,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         })
         .collect::<Vec<_>>();
 
-
     let mut intersections = std::collections::HashSet::new();
     for line1 in wire1_lines.clone() {
         for line2 in &wire2_lines {
@@ -194,12 +196,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         .min_by(|a, b| (a.x.abs() + a.y.abs()).cmp(&(b.x.abs() + b.y.abs())))
         .unwrap();
 
-
     println!("part1 ans: {}", closest.x.abs() + closest.y.abs());
 
     use std::collections::HashMap;
     let mut wire1_steps: HashMap<Coord, usize> = HashMap::new();
-    for (steps, coords) in Wire(wire1_lines.clone()        ).coords_iter().enumerate() {
+    for (steps, coords) in Wire(wire1_lines.clone()).coords_iter().enumerate() {
         if intersections.contains(&coords) {
             wire1_steps.insert(coords, steps);
         }
