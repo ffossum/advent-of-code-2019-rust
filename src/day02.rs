@@ -1,5 +1,5 @@
 fn main() {
-    let input = std::fs::read_to_string("input.txt").unwrap();
+    let input = std::fs::read_to_string("day02/input.txt").unwrap();
     let input = input
         .split(",")
         .map(|x| x.trim().parse().unwrap())

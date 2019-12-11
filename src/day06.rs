@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let input = std::fs::read_to_string("input.txt")?;
+pub fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let input = std::fs::read_to_string("day06/input.txt")?;
     let mut orbit_counts: HashMap<&str, u32> = HashMap::new();
     let mut children: HashMap<&str, Vec<&str>> = HashMap::new();
     let mut parents: HashMap<&str, &str> = HashMap::new();

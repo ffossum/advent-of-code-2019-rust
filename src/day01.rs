@@ -2,7 +2,7 @@ use std::error::Error;
 use std::iter;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let input = std::fs::read_to_string("input.txt")?;
+    let input = std::fs::read_to_string("day01/input.txt")?;
     let input = input
         .lines()
         .filter(|line| !line.is_empty())

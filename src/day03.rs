@@ -145,7 +145,7 @@ impl Line {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let input = std::fs::read_to_string("input.txt")?;
+    let input = std::fs::read_to_string("day03/input.txt")?;
     let mut input_lines = input.lines();
 
     let wire1: &str = input_lines.next().unwrap();

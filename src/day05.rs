@@ -23,7 +23,7 @@ impl Parameter {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let input = std::fs::read_to_string("input.txt")?;
+    let input = std::fs::read_to_string("day05/input.txt")?;
     let input = input
         .split(",")
         .map(|x| x.trim().parse().unwrap())
