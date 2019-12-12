@@ -24,7 +24,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             parents.insert(child, parent);
         });
 
-    let total_orbits: usize = sum_depths(1, "COM", &children);
+    let total_orbits: usize = sum_depths(0, "COM", &children);
 
     println!("{}", total_orbits);
 
@@ -69,7 +69,7 @@ fn get_ancestors<'a>(mut child: &'a str, parents: &'a HashMap<&str, &str>) -> Ve
 fn sum_depths(depth: usize, root: &str, children: &HashMap<&str, Vec<&str>>) -> usize {
     let empty = Vec::new();
     let direct_children = children.get(root).unwrap_or(&empty);
-    direct_children.len() * depth
+    direct_children.len() * (depth + 1)
         + direct_children
             .iter()
             .map(|child| sum_depths(depth + 1, child, children))
