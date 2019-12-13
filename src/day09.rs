@@ -74,13 +74,21 @@ pub fn main() -> Result<(), Box<dyn Error>> {
         -1, -2, 1106, 0, 968, 22101, 0, -2, -2, 109, -3, 2106, 0, 0,
     ];
 
-    let mut program = Program::new(instructions.clone());
+    let part1_ans = {
+        let mut program = Program::new(instructions.clone());
+        let mut inputs = VecDeque::new();
+        inputs.push_back(1);
+        program.run_all(inputs)?
+    };
+    println!("{:?}", part1_ans);
 
-    let mut inputs = VecDeque::new();
-    inputs.push_back(1);
-
-    let output = program.run_all(inputs);
-    println!("{:?}", output);
+    let part2_ans = {
+        let mut program = Program::new(instructions.clone());
+        let mut inputs = VecDeque::new();
+        inputs.push_back(2);
+        program.run_all(inputs)?
+    };
+    println!("{:?}", part2_ans);
 
     Ok(())
 }
@@ -152,55 +160,58 @@ impl Program {
         ([mode_1, mode_2, mode_3], opcode)
     }
 
-    fn get_address(&mut self) -> Result<usize, Box<dyn Error>> {
-        let target = usize::try_from(self.instructions[self.idx])?;
+    fn get_address(&mut self, mode: u8) -> Result<usize, Box<dyn Error>> {
+        let param = Parameter::new(mode, self.instructions[self.idx])?;
         self.idx += 1;
-        Ok(target)
+
+        let address = match param {
+            Parameter::Position(i) => i,
+            Parameter::Immediate(_) => Err("illegal mode for address param")?,
+            Parameter::Relative(i) => usize::try_from(self.relative_base + i)?,
+        };
+        Ok(address)
     }
 
     pub fn run_all(&mut self, mut inputs: VecDeque<i64>) -> Result<Vec<i64>, Box<dyn Error>> {
-      let mut outputs = Vec::new();
-      let mut input: Option<i64> = inputs.pop_front();
-      loop {
-        match self.run(input)? {
-          Output::WaitingForInput => {
-            if inputs.is_empty() {
-                Err("missing input")?
-              } else {
-                input = inputs.pop_front()
-              }
-          }
-          Output::Halted => return Ok(outputs),
-          Output::Value(value) => outputs.push(value),
+        let mut outputs = Vec::new();
+        let mut input: Option<i64> = inputs.pop_front();
+        loop {
+            match self.run(input)? {
+                Output::WaitingForInput => {
+                    if inputs.is_empty() {
+                        Err("missing input")?
+                    } else {
+                        input = inputs.pop_front()
+                    }
+                }
+                Output::Halted => return Ok(outputs),
+                Output::Value(value) => outputs.push(value),
+            }
         }
-      }
     }
 
     pub fn run(&mut self, mut input: Option<i64>) -> Result<Output, Box<dyn Error>> {
         while self.idx < self.instructions.len() {
             let instruction_start_i = self.idx;
 
-            let ([mode_1, mode_2, _mode_3], opcode) = self.get_opcode();
+            let ([mode_1, mode_2, mode_3], opcode) = self.get_opcode();
             match opcode {
                 1 => {
                     let value_1 = self.get_value(mode_1)?;
                     let value_2 = self.get_value(mode_2)?;
-                    let target = self.get_address()?;
+                    let target = self.get_address(mode_3)?;
                     self.write_value(target, value_1 + value_2);
-                    // self.instructions[target] = value_1 + value_2;
                 }
                 2 => {
                     let value_1 = self.get_value(mode_1)?;
                     let value_2 = self.get_value(mode_2)?;
-                    let target = self.get_address()?;
+                    let target = self.get_address(mode_3)?;
                     self.write_value(target, value_1 * value_2);
-                    // self.instructions[target] = value_1 * value_2;
                 }
                 3 => {
                     if let Some(input_value) = input.take() {
-                        let target = self.get_address()?;
+                        let target = self.get_address(mode_1)?;
                         self.write_value(target, input_value);
-                    // self.instructions[target] = input_value;
                     } else {
                         self.idx = instruction_start_i;
                         return Ok(Output::WaitingForInput);
@@ -229,27 +240,23 @@ impl Program {
                 7 => {
                     let value_1 = self.get_value(mode_1)?;
                     let value_2 = self.get_value(mode_2)?;
-                    let target = self.get_address()?;
+                    let target = self.get_address(mode_3)?;
 
                     if value_1 < value_2 {
                         self.write_value(target, 1);
-                    // self.instructions[target] = 1;
                     } else {
                         self.write_value(target, 0);
-                        // self.instructions[target] = 0;
                     }
                 }
                 8 => {
                     let value_1 = self.get_value(mode_1)?;
                     let value_2 = self.get_value(mode_2)?;
-                    let target = self.get_address()?;
+                    let target = self.get_address(mode_3)?;
 
                     if value_1 == value_2 {
                         self.write_value(target, 1);
-                    // self.instructions[target] = 1;
                     } else {
                         self.write_value(target, 0);
-                        // self.instructions[target] = 0;
                     }
                 }
                 9 => {
@@ -275,7 +282,7 @@ enum Output {
     Halted,
 }
 impl Output {
-    fn get_value(&self) -> Option<i64> {
+    pub fn get_value(&self) -> Option<i64> {
         if let Output::Value(value) = self {
             Some(*value)
         } else {
@@ -287,94 +294,6 @@ impl Output {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn run_looped_amplifier_sequence(
-        instructions: &Vec<i64>,
-        phase_settings: &[i64],
-    ) -> Result<i64, Box<dyn Error>> {
-        let mut programs = Vec::new();
-        for &phase_setting in phase_settings {
-            let mut program = Program::new(instructions.clone());
-            program.run(Some(phase_setting))?;
-            programs.push(program)
-        }
-
-        let mut previous_output = 0;
-        for amp_id in (0..phase_settings.len()).cycle() {
-            let program = programs.get_mut(amp_id).unwrap();
-            let output = program.run(Some(previous_output))?;
-
-            match output {
-                Output::Value(value) => previous_output = value,
-                Output::Halted => return Ok(previous_output),
-                _ => (),
-            }
-        }
-
-        Err("no result")?
-    }
-
-    fn run_amplifier_sequence(
-        instructions: &Vec<i64>,
-        sequence: &[i64],
-    ) -> Result<i64, Box<dyn Error>> {
-        let mut previous_output = 0;
-        for &x in sequence {
-            let instructions = instructions.clone();
-            let mut program = Program::new(instructions);
-
-            program.run(Some(x))?;
-            let output = program.run(Some(previous_output))?;
-
-            if let Output::Value(value) = output {
-                previous_output = value;
-            }
-        }
-        Ok(previous_output)
-    }
-
-    #[test]
-    fn test_input_1() {
-        let instructions = vec![
-            3, 15, 3, 16, 1002, 16, 10, 16, 1, 16, 15, 15, 4, 15, 99, 0, 0,
-        ];
-        let sequence = vec![4, 3, 2, 1, 0];
-
-        let res = run_amplifier_sequence(&instructions, &sequence).unwrap();
-        assert_eq!(res, 43210);
-    }
-    #[test]
-    fn test_input_2() {
-        let instructions = vec![
-            3, 23, 3, 24, 1002, 24, 10, 24, 1002, 23, -1, 23, 101, 5, 23, 23, 1, 24, 23, 23, 4, 23,
-            99, 0, 0,
-        ];
-        let sequence = vec![0, 1, 2, 3, 4];
-        let res = run_amplifier_sequence(&instructions, &sequence).unwrap();
-        assert_eq!(res, 54321);
-    }
-
-    #[test]
-    fn test_input_3() {
-        let instructions = vec![
-            3, 31, 3, 32, 1002, 32, 10, 32, 1001, 31, -2, 31, 1007, 31, 0, 33, 1002, 33, 7, 33, 1,
-            33, 31, 31, 1, 32, 31, 31, 4, 31, 99, 0, 0, 0,
-        ];
-        let sequence = vec![1, 0, 4, 3, 2];
-        let res = run_amplifier_sequence(&instructions, &sequence).unwrap();
-        assert_eq!(res, 65210);
-    }
-
-    #[test]
-    fn test_loop_input_1() {
-        let instructions = vec![
-            3, 26, 1001, 26, -4, 26, 3, 27, 1002, 27, 2, 27, 1, 27, 26, 27, 4, 27, 1001, 28, -1,
-            28, 1005, 28, 6, 99, 0, 0, 5,
-        ];
-        let sequence = vec![9, 8, 7, 6, 5];
-        let res = run_looped_amplifier_sequence(&instructions, &sequence).unwrap();
-        assert_eq!(res, 139629729);
-    }
 
     #[test]
     fn test_day09_1() {
