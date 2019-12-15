@@ -93,7 +93,7 @@ pub fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-struct Program {
+pub struct Program {
     instructions: Vec<i64>,
     extra_memory: HashMap<usize, i64>,
     idx: usize,
@@ -276,7 +276,7 @@ impl Program {
 }
 
 #[derive(Debug)]
-enum Output {
+pub enum Output {
     Value(i64),
     WaitingForInput,
     Halted,
