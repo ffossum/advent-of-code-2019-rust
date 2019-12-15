@@ -7,8 +7,9 @@ mod day06;
 mod day07;
 mod day08;
 mod day09;
+mod day10;
 
 fn main() {
-    let res = day09::main();
+    let res = day10::main();
     println!("{:?}", res);
 }
