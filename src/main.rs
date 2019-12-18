@@ -9,7 +9,10 @@ mod day08;
 mod day09;
 mod day10;
 mod day11;
+mod day12;
 mod day14;
+mod day15;
+mod day16;
 
 fn main() {
     let res = day14::main();
