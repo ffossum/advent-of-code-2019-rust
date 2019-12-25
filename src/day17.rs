@@ -15,14 +15,14 @@ pub fn main() -> Result<(), Box<dyn Error>> {
 
     let mut scaffold_points = HashSet::new();
 
-    let mut output: String = String::new();
+    let mut image: String = String::new();
     let mut x: isize = 0;
     let mut y: isize = 0;
 
     while let Some(value) = program.run(None)?.get_value() {
         let c = value as u8 as char;
 
-        output.push(c);
+        image.push(c);
 
         if let '^' | 'v' | '<' | '>' | '#' = c {
             scaffold_points.insert(Point2D { x, y });
@@ -51,6 +51,7 @@ pub fn main() -> Result<(), Box<dyn Error>> {
         .map(|&Point2D { x, y }| x * y)
         .sum();
 
+    println!("{}", image);
     println!("{}", part1_ans);
 
     Ok(())

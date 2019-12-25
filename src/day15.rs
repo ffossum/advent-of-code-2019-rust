@@ -1,16 +1,71 @@
 use crate::day09;
-use std::collections::HashMap;
-use std::convert::TryFrom;
+use num_derive::*;
+use num_traits::*;
+use petgraph::graphmap::GraphMap;
+use std::collections::{HashMap, HashSet};
 
 pub fn main() {
-    let mut known_tiles: HashMap<Point, Tile> = HashMap::new();
-    known_tiles.insert(Point { x: 0, y: 0 }, Tile::Floor);
-
     let instructions = get_instructions();
     let program = day09::Program::new(instructions);
-    let droid = Droid::new(program);
+    let mut droid = Droid::new(program);
 
-    print_map(&known_tiles, &droid);
+    droid.move_forward();
+    droid.rotate_right();
+    droid.move_forward();
+    droid.rotate_right();
+    droid.move_forward();
+    droid.rotate_right();
+    droid.move_forward();
+
+    while droid.position != droid.start_position {
+        let status = droid.strafe_left();
+        if status != Status::HitWall {
+            droid.rotate_left();
+        } else {
+            let status = droid.move_forward();
+            if status == Status::HitWall {
+                droid.rotate_right();
+            }
+        }
+    }
+    print_map(&droid.map, &droid);
+
+    let mut edges: HashSet<(Point, Point)> = HashSet::new();
+    for (&position, tile) in droid.map.iter() {
+        let east_neighbor = position + (Direction::East * 1);
+        let south_neighbor = position + (Direction::South * 1);
+
+        if let Some(Tile::Floor(_)) = droid.map.get(&east_neighbor) {
+            edges.insert((position, east_neighbor));
+        }
+
+        if let Some(Tile::Floor(_)) = droid.map.get(&south_neighbor) {
+            edges.insert((position, south_neighbor));
+        }
+    }
+
+    let graph: GraphMap<Point, (), petgraph::Undirected> = GraphMap::from_edges(edges);
+
+    let oxygen_position: Point = droid
+        .map
+        .iter()
+        .find_map(|(&position, &tile)| {
+            Some(position).filter(|_| tile == Tile::Floor(Some(OxygenSystem)))
+        })
+        .unwrap();
+
+    println!("oxygen position: {:?}", oxygen_position);
+
+    let distances =
+        petgraph::algo::dijkstra(&graph, droid.start_position, Some(oxygen_position), |_| 1);
+
+    let oxygen_distance = distances.get(&oxygen_position).unwrap();
+    println!("oxygen distance: {:?}", oxygen_distance);
+
+    let distances_from_oxygen = petgraph::algo::dijkstra(&graph, oxygen_position, None, |_| 1);
+    let max_distance = distances_from_oxygen.values().max().unwrap();
+
+    println!("max distance from oxygen: {}", max_distance); // off by one error for some reason ...
 }
 
 fn print_map(tiles: &HashMap<Point, Tile>, droid: &Droid) {
@@ -23,56 +78,143 @@ fn print_map(tiles: &HashMap<Point, Tile>, droid: &Droid) {
         for x in min_x..=max_x {
             let p = Point { x, y };
             if p == droid.position {
-                print!("🤖")
+                print!("D ")
             } else {
                 match tiles.get(&p) {
-                    Some(Tile::Wall) => print!("█"),
-                    Some(Tile::Floor) => print!("."),
-                    _ => print!(" "),
+                    Some(Tile::Wall) => print!("██"),
+                    Some(Tile::Floor(None)) => print!("· "),
+                    Some(Tile::Floor(Some(OxygenSystem))) => print!("X "),
+                    _ => print!("  "),
                 }
             }
         }
         println!("")
     }
 }
+
+#[derive(Eq, PartialEq, FromPrimitive, ToPrimitive)]
+enum Status {
+    HitWall = 0,
+    MovedToEmpty = 1,
+    MovedToOxygen = 2,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+struct OxygenSystem;
+
+#[derive(Copy, Clone, Eq, PartialEq)]
 enum Tile {
-    Floor,
+    Floor(Option<OxygenSystem>),
     Wall,
 }
 struct Droid {
     program: day09::Program,
+    start_position: Point,
     position: Point,
+    direction: Direction,
+    map: HashMap<Point, Tile>,
 }
 impl Droid {
     fn new(program: day09::Program) -> Self {
+        let position = Point { x: 0, y: 0 };
+
+        let mut map: HashMap<Point, Tile> = HashMap::new();
+        map.insert(position, Tile::Floor(None));
+
         Droid {
             program,
-            position: Point { x: 0, y: 0 },
+            start_position: position,
+            position,
+            direction: Direction::North,
+            map,
         }
+    }
+
+    fn move_forward(&mut self) -> Status {
+        let input = self.direction.to_i64().unwrap();
+        let status = self.program.run(Some(input)).unwrap().get_value().unwrap();
+        let status = Status::from_i64(status).unwrap();
+
+        let target_position = self.position + (self.direction * 1);
+        if status != Status::HitWall {
+            self.position = target_position;
+        }
+
+        let target_tile = match status {
+            Status::HitWall => Tile::Wall,
+            Status::MovedToEmpty => Tile::Floor(None),
+            Status::MovedToOxygen => Tile::Floor(Some(OxygenSystem)),
+        };
+
+        self.map.insert(target_position, target_tile);
+
+        status
+    }
+
+    fn strafe_left(&mut self) -> Status {
+        self.rotate_left();
+        let status = self.move_forward();
+        self.rotate_right();
+        status
+    }
+
+    fn rotate_left(&mut self) {
+        let left_direction = match self.direction {
+            Direction::North => Direction::West,
+            Direction::South => Direction::East,
+            Direction::West => Direction::South,
+            Direction::East => Direction::North,
+        };
+        self.direction = left_direction;
+    }
+    fn rotate_right(&mut self) {
+        let right_direction = match self.direction {
+            Direction::North => Direction::East,
+            Direction::South => Direction::West,
+            Direction::West => Direction::North,
+            Direction::East => Direction::South,
+        };
+        self.direction = right_direction;
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Hash, Copy, Clone, PartialOrd, Ord)]
 struct Point {
     x: i32,
     y: i32,
 }
+use std::ops::{Add, AddAssign};
+impl Add for Point {
+    type Output = Self;
+    fn add(self, other: Self) -> Self::Output {
+        Point {
+            x: self.x + other.x,
+            y: self.y + other.y,
+        }
+    }
+}
+impl AddAssign for Point {
+    fn add_assign(&mut self, other: Self) {
+        *self = *self + other
+    }
+}
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, FromPrimitive, ToPrimitive)]
 enum Direction {
     North = 1,
     South = 2,
     West = 3,
     East = 4,
 }
-impl TryFrom<i64> for Direction {
-    type Error = &'static str;
-    fn try_from(value: i64) -> Result<Direction, Self::Error> {
-        match value {
-            1 => Ok(Direction::North),
-            2 => Ok(Direction::South),
-            3 => Ok(Direction::West),
-            4 => Ok(Direction::East),
-            _ => Err("illegal direction value"),
+use std::ops::Mul;
+impl Mul<i32> for Direction {
+    type Output = Point;
+    fn mul(self, rhs: i32) -> Self::Output {
+        match self {
+            Direction::North => Point { x: 0, y: -rhs },
+            Direction::South => Point { x: 0, y: rhs },
+            Direction::West => Point { x: -rhs, y: 0 },
+            Direction::East => Point { x: rhs, y: 0 },
         }
     }
 }

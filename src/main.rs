@@ -17,6 +17,6 @@ mod day16;
 mod day17;
 
 fn main() {
-    let res = day17::main();
+    let res = day15::main();
     println!("{:?}", res);
 }
